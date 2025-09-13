@@ -5,3 +5,6 @@
 #### TrajPredictapi为一个 fastapi 项目，启动所需要的库请看 requirements.txt 或 environment.yml
 
 #### 目前 项目中仅有一个算法：简易的 transformer 模型
+
+#### 数据集来源：1、丹麦海事局： http://aisdata.ais.dk/?prefix=
+               2、美国NOAA：https://hub.marinecadastre.gov/pages/vesseltraffic
