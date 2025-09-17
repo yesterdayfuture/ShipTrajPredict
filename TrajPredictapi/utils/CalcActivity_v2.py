@@ -148,7 +148,7 @@ def getDistanceNbor(row:DataFrame, activtity_polygon: dict, config_threshold:dic
     elif curMinDistance <= config_threshold['侦查']:
 
         if curRegion == "台湾海峡":
-            activityName = "预计要进行穿航，可能性 70%"
+            activityName = f"预计要进行穿航，可能性 {1/(curMinDistance + 1) * 100 :.4f}%"
         else:
             activityName = "侦查"
 
@@ -160,14 +160,14 @@ def getDistanceNbor(row:DataFrame, activtity_polygon: dict, config_threshold:dic
             activityName = "闯岛"
 
         if curRegion == "台湾海峡":
-            activityName = "预计要进行穿航，可能性 40%"
+            activityName = f"预计要进行穿航，可能性 {1/(curMinDistance + 1) * 100 :.4f}%"
 
     elif curMinDistance <= config_threshold['抵近岛礁']:
 
         if curRegion in ["台湾", "钓鱼岛", "黄岩岛", "西沙群岛", "南海岛礁"]:
             activityName = "抵近岛礁"
         if curRegion == "台湾海峡":
-            activityName = "预计要进行穿航，可能性 20%"
+            activityName = f"预计要进行穿航，可能性 {1/(curMinDistance + 1) * 100 :.4f}%"
 
     else:
         activityName = "正常航行"
