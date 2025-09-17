@@ -12,6 +12,7 @@ from utils.CalcTrajActivity import CalcTrajActivity_main
 from utils.CalcShipSogCog import add_speed_heading_geopy
 from utils.UnionTraj import UnionTraj_main
 from kimi.util_modelPredict import UtilModelPredic_main
+from utils.CalcActivity_v2 import getDistanceNbor, config_threshold, activtity_polygon
 
 app = FastAPI(
     title="Demo API",
@@ -132,6 +133,32 @@ def traj_activity(data:Dict):
     return response_success(data=convert_df_to_dict(result_data))
 
 
+# 活动场景 分析 api
+@app.post("/api/v2/traj_activity", response_model=Union[R[Dict], R[str]],
+          description="根据输入的船舶轨迹，判断当前的轨迹所属 任务场景(输入数据的 key 值 必须包含 'MMSI','LAT','LON','timeUnix')")
+def traj_activity2(data: Dict):
+    # 获取 输入数据的 key 值
+    clounms = list(data.keys())
+    # 输入数据的 key 值 必须包含下方内容
+    required_keys = ['MMSI', 'LAT', 'LON', 'timeUnix']
+    # 检查字典是否包含所有指定的键
+    if not contains_keys(clounms, required_keys):
+        return response_fail(data="输入数据不规范，字典缺少某些键")
+
+    new_data = {}
+    for key in ['MMSI', 'LAT', 'LON', 'timeUnix']:
+        new_data[key] = data[key]
+
+    df = pd.DataFrame(new_data)
+    df['timeUnix'] = pd.to_datetime(df["timeUnix"])
+
+    newcols = df.apply(
+        lambda row: getDistanceNbor(row, activtity_polygon, config_threshold), axis=1, result_type='expand')
+
+    # print(newcols)
+    df[["NborRegion", "NborDistance", "Activity"]] = newcols
+
+    return response_success(data=convert_df_to_json(df))
 
 
 

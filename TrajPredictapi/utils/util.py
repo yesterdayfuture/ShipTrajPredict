@@ -31,6 +31,40 @@ def convert_df_to_dict(df):
     return result_dict
 
 
+def convert_df_to_json(df):
+    """
+    将DataFrame转换为指定格式的字典
+    格式示例:
+    {
+        "mmsi编号1": [
+                    {"LON":121, "LAT":121,"timeUnix":"2025-01-01"},
+                    {"LON":121, "LAT":121,"timeUnix":"2025-01-01"},
+                    ],
+        "mmsi编号2": [
+                    {"LON":121, "LAT":121,"timeUnix":"2025-01-01"},
+                    {"LON":121, "LAT":121,"timeUnix":"2025-01-01"},
+                    ],
+    }
+    """
+    if not isinstance(df, pd.DataFrame):
+        raise TypeError("输入必须是pandas DataFrame")
+
+    result_dict = {}
+    df_groups = df.groupby("MMSI")
+    for curGroupName in list(df_groups.groups.keys()):
+        cur_group = df_groups.get_group(curGroupName).sort_values(by="timeUnix")
+        cur_group_cols = cur_group.columns.tolist()
+        cur_data = []
+        # print(cur_group_cols)
+        for _, row in cur_group.iterrows():
+            # print(row)
+            cur_row = {k:row[k] for k in cur_group_cols if k!="MMSI"}
+            cur_data.append(cur_row)
+
+        result_dict[curGroupName] = cur_data
+
+    return result_dict
+
 def getTimeColNmae(df:DataFrame):
     """
     获取 类型属于 时间的 列的列名
