@@ -87,3 +87,13 @@ def format_timedelta(td):
     hours, remainder = divmod(total_seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
     return f"{hours:02}:{minutes:02}:{seconds:02}"
+
+
+# 获取 船舶 类型、所属方、平均速度
+def getTypeAndBelongAndAvgSog(row, df:DataFrame):
+
+    return pd.Series({
+        "ShipType":df.loc[df['MMSI'] == row['MMSI'], 'Type'].iloc[0],
+        'Belong':df.loc[df['MMSI'] == row['MMSI'], 'Belong'].iloc[0],
+        "AvgSog":df.loc[df['MMSI'] == row['MMSI'], 'SOG'].mean()
+    })
