@@ -13,6 +13,7 @@ from utils.CalcShipSogCog import add_speed_heading_geopy
 from utils.UnionTraj import UnionTraj_main
 from kimi.util_modelPredict import UtilModelPredic_main
 from utils.CalcActivity_v2 import getDistanceNbor, config_threshold, activtity_polygon
+from utils.AnalyzeOnTypicalTraj import getTypicalTraj
 
 app = FastAPI(
     title="Demo API",
@@ -200,8 +201,31 @@ def traj_activity2(data: Dict):
     return response_success(data=convert_df_to_json(df))
 
 
+# 舰船 典型轨迹分析
+@app.post("/api/v1/type_traj", response_model=Union[R[Dict], R[str]],
+          description="根据输入的船舶轨迹，对当前轨迹中的典型轨迹进行分析 (输入数据的 key 值 必须包含 'MMSI','LAT','LON','timeUnix')")
+def getTypicalTrajAnalyze(data: Dict):
+    # 获取 输入数据的 key 值
+    clounms = list(data.keys())
+    # 输入数据的 key 值 必须包含下方内容
+    required_keys = ['MMSI', 'LAT', 'LON', 'timeUnix']
+    # 检查字典是否包含所有指定的键
+    if not contains_keys(clounms, required_keys):
+        return response_fail(data="输入数据不规范，字典缺少某些键")
+
+    df = pd.DataFrame(data)
+    df['timeUnix'] = pd.to_datetime(df["timeUnix"])
+
+    df = add_speed_heading_geopy(df)
+
+    result_data = getTypicalTraj(df)
+
+    return response_success(data="test")
+
+
+
 
 # 主函数入口
 if __name__ == '__main__':
 # 启动FastAPI应用，用6006端口映射到本地，从而在本地使用api
-    uvicorn.run(app, host='0.0.0.0', port=6006, workers=1)  # 在指定端口和主机上启动应用
+    uvicorn.run("main:app", host='0.0.0.0', port=6006, reload=True)  # 在指定端口和主机上启动应用

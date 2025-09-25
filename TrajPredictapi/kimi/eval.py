@@ -1,12 +1,16 @@
 import sys
 import os
 # 将父目录添加到Python路径
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 from sklearn.metrics import mean_squared_error
-from kimi.dataProcess import *
-from kimi.train import *
+# from kimi.dataProcess import *
+# from kimi.train import *
+
+from dataProcess import *
+from train import *
+from geopy.distance import geodesic
 
 '''
 AIS 轨迹预测通常用：
@@ -20,7 +24,7 @@ AIS 轨迹预测通常用：
 
 
 #文件 路径
-file_path = r"data/AIS_2023_12_28_test.csv"
+file_path = r"../data/AIS_2023_12_28_test.csv"
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 # device = 'cpu'
 
@@ -104,6 +108,74 @@ def evalADE_FDE_latLon(model, loader, stats):
     return np.mean(ades), np.mean(fdes)
 
 
+# =============== 3.3、模型评估函数（将预测结果转为真实经纬度，然后进行评估准确率ACC） =========================
+
+def great_circle_error(pred, y_true):
+    """矢量大圆距离，单位 m"""
+    # print(type(pred), type(y_true))
+    # print(type(y_true[0]))
+    # print(pred[0][0])
+    return np.array([geodesic((y_true[i][0], y_true[i][1]),
+                              (pred[i][0], pred[i][1])).m
+                     for i in range(len(pred))])
+
+def accuracy_at_tau(err, tau):
+    """准确率@τ"""
+    return np.mean(err <= tau)
+
+def eval_traj(pred, y_true, tau_list=(100, 500, 1000, 1800, 3600, 5400)):
+    err = great_circle_error(pred, y_true)
+    acc = {f'ACC@{t}m': accuracy_at_tau(err, t) for t in tau_list}
+    return err, acc
+
+@torch.no_grad()
+def eval_Acc_latLon(model, loader, stats):
+    model.eval()
+    y_trues, preds = [], []
+
+    lat_min, lat_max = stats['lat_min'], stats['lat_max']
+    lon_min, lon_max = stats['lon_min'], stats['lon_max']
+    lat_scale, lon_scale = lat_max - lat_min, lon_max - lon_min
+
+    for x, vtype, y, raw_y in loader:
+        x, vtype = x.to(device), vtype.to(device)
+
+        # 原始归一化经纬度 进行 反归一化
+        y_true_norm = raw_y.to(device)
+        y_true_lat = y_true_norm[..., 0] * lat_scale + lat_min
+        y_true_lon = y_true_norm[..., 1] * lon_scale + lon_min
+        y_true = torch.stack([y_true_lat, y_true_lon], dim=-1)
+        y_true = y_true.reshape(-1,  2).detach().numpy()
+        # print(y_true.shape)
+
+        # 模型预测 偏移
+        delta = model(x, vtype)  # (B, H, 2) 归一化坐标
+
+        # 反归一化 -> 真实 lat/lon
+        last = x[:, -1, :2].view(-1,1,2).to(delta.device)
+        pred_norm = last + delta                  # 归一化坐标
+
+        pred_lat = pred_norm[..., 0] * lat_scale + lat_min
+        pred_lon = pred_norm[..., 1] * lon_scale + lon_min
+        pred = torch.stack([pred_lat, pred_lon], dim=-1)  # (B, H, 2)
+        pred = pred.reshape(-1, 2).detach().numpy()
+
+        # print(pred.shape)
+        y_trues.extend(y_true)
+        preds.extend(pred)
+        # break
+    # print(y_trues[0])
+    err, acc = eval_traj(preds,y_trues)
+
+    print('---- 轨迹预测准确率 ----')
+    for k, v in acc.items():
+        print(f'{k}: {v:.1%}')
+
+    return err, acc
+
+
+
+
 
 # =============== 四、模型推理 =============================
 
@@ -158,19 +230,23 @@ if __name__ == '__main__':
     val_dl = DataLoader(val_ds, batch_size=512)
 
     # ============== 二、模型加载 ==============================
-    model = torch.load( r"kimi/kimi_model6.pth")
+    model = torch.load( r"kimi_model6.pth", weights_only=False, map_location=torch.device('cpu'))
     print(Fore.YELLOW + "成功 加载 预测模型...\n"  + Style.RESET_ALL)
 
-    torch.save(model.state_dict(), 'kimi/kimi_model6.pt')
+    # torch.save(model.state_dict(), 'kimi/kimi_model6.pt')
 
 
-    # 评估 预测误差
-    ade, fde = evalADE_FDE(model, val_dl, stats)
-    print(f'ADE(norm)={ade:.4f}, FDE(norm)={fde:.4f}')
+    # # 评估 预测误差
+    # ade, fde = evalADE_FDE(model, val_dl, stats)
+    # print(f'ADE(norm)={ade:.4f}, FDE(norm)={fde:.4f}')
+    #
+    # # 评估 反归一化后的 海里 误差
+    # ade_nmi, fde_nmi = evalADE_FDE_latLon(model, val_dl, stats)
+    # print(f'ADE={ade_nmi:.3f} nmi, FDE={fde_nmi:.3f} nmi')
 
-    # 评估 反归一化后的 海里 误差
-    ade_nmi, fde_nmi = evalADE_FDE_latLon(model, val_dl, stats)
-    print(f'ADE={ade_nmi:.3f} nmi, FDE={fde_nmi:.3f} nmi')
+    # 评估 反归一化后的 准确率
+    err, acc = eval_Acc_latLon(model, val_dl, stats)
+
 
     pred = None
     y_true = None
